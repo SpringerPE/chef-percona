@@ -19,4 +19,4 @@ when "rhel"
     mode 0755
     source "garb.erb"
   end.
-end
+end.

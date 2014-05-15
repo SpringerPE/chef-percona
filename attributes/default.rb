@@ -170,9 +170,9 @@ default["percona"]["cluster"]["innodb_autoinc_lock_mode"]       = 2
 # Galera Witness Settings
 case node["platform_family"]
 when "debian"
-  default["percona"]["witness"]["package"]                       = "percona-xtradb-cluster-galera-2.x"
+  default["percona"]["witness"]["package"]                       = "percona-xtradb-cluster-garbd-3.x"
 when "rhel"
-  default["percona"]["witness"]["package"]                       = "Percona-XtraDB-Cluster-galera-2"
+  default["percona"]["witness"]["package"]                       = "Percona-XtraDB-Cluster-galera-3"
 end
 default["percona"]["witness"]["nodes"]   = ""
 default["percona"]["witness"]["group"]   = ""

@@ -6,17 +6,17 @@
 case node["platform_family"]
 when "debian"
   template "/etc/default/garb" do
+  	source "garb.erb"
     owner "root"
     group "root"
     mode 0755
-    source "garb.erb"
   end
 
 when "rhel"
   template "/etc/sysconfig/garb" do
+  	source "garb.erb"
     owner "root"
     group "root"
     mode 0755
-    source "garb.erb"
   end
 end

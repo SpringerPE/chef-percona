@@ -10,7 +10,7 @@ when "debian"
     group "root"
     mode 0755
     source "garb.erb"
-  end.
+  end
 
 when "rhel"
   template "/etc/sysconfig/garb" do
@@ -18,5 +18,5 @@ when "rhel"
     group "root"
     mode 0755
     source "garb.erb"
-  end.
-end.
+  end
+end

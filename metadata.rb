@@ -4,7 +4,7 @@ maintainer_email  "github@phlippers.net"
 license           "MIT"
 description       "Installs Percona MySQL client and server"
 long_description  "Please refer to README.md"
-version           "0.15.1"
+version           "0.15.2"
 
 recipe "percona",                "Includes the client recipe to configure a client"
 recipe "percona::package_repo",  "Sets up the package repository and installs dependent packages"
@@ -17,6 +17,8 @@ recipe "percona::configure_server", "Used internally to manage the server config
 recipe "percona::replication",   "Used internally to grant permissions for replication."
 recipe "percona::access_grants", "Used internally to grant permissions for recipes"
 recipe "percona::monitoring", "Installs Percona monitoring plugins for Nagios"
+recipe "percona::witness",        "Installs garbd for witness node"
+recipe "percona::configure_witness", "Used internally to manage the witness configuration."
 
 depends "apt", ">= 1.9"
 depends "yum", "~> 3.0"

@@ -166,3 +166,15 @@ default["percona"]["cluster"]["wsrep_sst_method"]               = "rsync"
 default["percona"]["cluster"]["wsrep_node_name"]                = ""
 default["percona"]["cluster"]["innodb_locks_unsafe_for_binlog"] = 1
 default["percona"]["cluster"]["innodb_autoinc_lock_mode"]       = 2
+
+# Galera Witness Settings
+case node["platform_family"]
+when "debian"
+  default["percona"]["witness"]["package"]                       = "percona-xtradb-cluster-galera-3.x"
+when "rhel"
+  default["percona"]["witness"]["package"]                       = "Percona-XtraDB-Cluster-galera-3"
+end
+default["percona"]["witness"]["nodes"]   = ""
+default["percona"]["witness"]["group"]   = ""
+default["percona"]["witness"]["options"] = "pc.wait_prim=no"
+default["percona"]["witness"]["logfile"] = ""

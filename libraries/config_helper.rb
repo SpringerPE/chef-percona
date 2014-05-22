@@ -24,23 +24,8 @@ module Percona
   # Public: This module provides a helper method for binding to a given IP
   # address
   module ConfigHelper
-    def bind_to(node, interface)
-      case interface.to_sym
-      when :public_ip
-        find_public_ip(node)
-      when :private_ip
-        find_private_ip(node)
-      when :loopback
-        find_loopback_ip(node)
-      else
-        find_interface_ip(node, interface)
-      end
-    end
-    module_function :bind_to
-
-    private
-
-    def find_public_ip(node)
+  
+  def find_public_ip(node)
       if node["cloud"] && node["cloud"]["public_ipv4"]
         node["cloud"]["public_ipv4"]
       else
@@ -82,5 +67,23 @@ module Percona
       end
       addr && addr[0]
     end
+  
+  
+  
+    def bind_to(node, interface)
+      case interface.to_sym
+      when :public_ip
+        find_public_ip(node)
+      when :private_ip
+        find_private_ip(node)
+      when :loopback
+        find_loopback_ip(node)
+      else
+        find_interface_ip(node, interface)
+      end
+    end
+    module_function :bind_to
+
+    
   end
 end

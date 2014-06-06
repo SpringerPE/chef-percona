@@ -1,3 +1,8 @@
+#
+# Cookbook Name:: percona
+# Recipe:: server
+#
+
 include_recipe "percona::package_repo"
 
 # install packages
@@ -22,7 +27,18 @@ when "rhel"
   end
 end
 
-include_recipe "percona::configure_server"
+if node["percona"]["server"]["jemalloc"]
+  package_name = value_for_platform_family(
+    "debian" => "libjemalloc1",
+    "rhel" => "jemalloc"
+  )
+
+  package package_name
+end
+
+unless node["percona"]["skip_configure"]
+  include_recipe "percona::configure_server"
+end
 
 # access grants
 unless node["percona"]["skip_passwords"]

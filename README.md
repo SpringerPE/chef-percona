@@ -83,6 +83,10 @@ This cookbook expects a `mysql` item  and a `system` item. Please refer to the o
 ### Skip passwords
 Set the `["percona"]["skip_passwords"]` attribute to skip setting up passwords. Removes the need for the encrypted data bag if using chef-solo. Is useful for setting up development and ci environments where you just want to use the root user with no password. If you are doing this you may want to set `[:percona][:server][:debian_username]` to be `"root"` also.
 
+### Skip Configure
+
+Set the `['percona']['skip_configure']` attribute to skip having the server recipe include the configure\_server recipe directly after install. This is mostly useful in a wrapper cookbook sort of context. Once skipped, you can then perform any pre-config actions your wrapper needs to, such as dropping a custom configuration file or init script or cleaning up incorrectly sized innodb logfiles. You can then include configure\_server where necessary.
+
 #### mysql item
 
 The mysql item should contain entries for root, backup, and replication. If no value is found, the cookbook will fall back to the default non-encrypted password.
@@ -109,6 +113,78 @@ Example: "passwords" data bag - this example assumes that `node[:percona][:serve
 ```
 
 Above shows the encrypted password in the data bag. Check out the `encrypted_data_bag_secret` setting in `knife.rb` to setup your data bag secret during bootstrapping.
+
+### Percona XtraDB Cluster
+
+Below is a minimal example setup to bootstrap a Percona XtraDB Cluster. Please see the [official documentation](http://www.percona.com/doc/percona-xtradb-cluster/5.6/index.html) for more information. This is not a perfect example. It is just a sample to get you started.
+
+Wrapper recipe recipes/percona.rb:
+
+```ruby
+# Setup the Percona XtraDB Cluster
+cluster_ips = []
+unless Chef::Config[:solo]
+  search(:node, 'role:percona').each do |other_node|
+    next if other_node['private_ipaddress'] == node['private_ipaddress']
+    Chef::Log.info "Found Percona XtraDB cluster peer: #{other_node['private_ipaddress']}"
+    cluster_ips << other_node['private_ipaddress']
+  end
+end
+
+cluster_ips.each do |ip|
+  firewall_rule "allow Percona group communication to peer #{ip}" do
+    source ip
+    port 4567
+    action :allow
+  end
+
+  firewall_rule "allow Percona state transfer to peer #{ip}" do
+    source ip
+    port 4444
+    action :allow
+  end
+
+  firewall_rule "allow Percona incremental state transfer to peer #{ip}" do
+    source ip
+    port 4568
+    action :allow
+  end
+end
+
+cluster_address = "gcomm://#{cluster_ips.join(',')}"
+Chef::Log.info "Using Percona XtraDB cluster address of: #{cluster_address}"
+node.override["percona"]["cluster"]["wsrep_cluster_address"] = cluster_address
+node.override["percona"]["cluster"]["wsrep_node_name"] = node['hostname']
+
+include_recipe 'percona::cluster'
+include_recipe 'percona::backup'
+include_recipe 'percona::toolkit'
+```
+
+Example percona role roles/percona.rb:
+
+```ruby
+name "percona"
+description "Percona XtraDB Cluster"
+
+run_list 'recipe[paydici::percona]'
+
+default_attributes(
+  "percona" => {
+    "server" => {
+      "role" => "cluster"
+    },
+
+    "cluster" => {
+      "package"                     => "percona-xtradb-cluster-56",
+      "wsrep_cluster_name"          => "percona_cluster_1",
+      "wsrep_sst_receive_interface" => "eth1" # can be eth0, public, private, etc.
+    }
+  }
+)
+```
+
+Now you need to bring three servers up one at a time with the percona role applied to them. By default the servers will sync up via rsync server state transfer (SST)
 
 ## Attributes
 
@@ -147,8 +223,19 @@ default["percona"]["server"]["enable"]                          = true
 default["percona"]["server"]["role"]                            = "standalone"
 default["percona"]["server"]["username"]                        = "mysql"
 default["percona"]["server"]["datadir"]                         = "/var/lib/mysql"
+default["percona"]["server"]["logdir"]                         = "/var/log/mysql"
 default["percona"]["server"]["tmpdir"]                          = "/tmp"
 default["percona"]["server"]["debian_username"]                 = "debian-sys-maint"
+default["percona"]["server"]["jemalloc"]                        = false
+default["percona"]["server"]["jemalloc_lib"]                    = value_for_platform_family(
+                                                                    "debian" => value_for_platform(
+                                                                      "ubuntu" => {
+                                                                        "trusty" => "/usr/lib/x86_64-linux-gnu/libjemalloc.so.1",
+                                                                        "precise" => "/usr/lib/libjemalloc.so.1"
+                                                                      }
+                                                                    ),
+                                                                    "rhel" => "/usr/lib64/libjemalloc.so.1"
+                                                                  )
 default["percona"]["server"]["nice"]                            = 0
 default["percona"]["server"]["open_files_limit"]                = 16384
 default["percona"]["server"]["hostname"]                        = "localhost"
@@ -161,6 +248,7 @@ default["percona"]["server"]["skip_name_resolve"]               = false
 default["percona"]["server"]["skip_external_locking"]           = true
 default["percona"]["server"]["net_read_timeout"]                = 120
 default["percona"]["server"]["connect_timeout"]                 = 10
+default["percona"]["server"]["wait_timeout"]                    = 28_800
 default["percona"]["server"]["old_passwords"]                   = 0
 default["percona"]["server"]["bind_address"]                    = "127.0.0.1"
 %w[debian_password root_password].each do |attribute|
@@ -254,6 +342,12 @@ default["percona"]["cluster"]["wsrep_slave_threads"]            = 2
 default["percona"]["cluster"]["wsrep_cluster_name"]             = ""
 default["percona"]["cluster"]["wsrep_sst_method"]               = "rsync"
 default["percona"]["cluster"]["wsrep_node_name"]                = ""
+default["percona"]["cluster"]["wsrep_notify_cmd"]               = ""
+
+# These both are used to build wsrep_sst_receive_address
+default["percona"]["cluster"]["wsrep_sst_receive_interface"]    = nil # Works like node["percona"]["server"]["bind_to"]
+default["percona"]["cluster"]["wsrep_sst_receive_port"]         = "4444"
+
 default["percona"]["cluster"]["innodb_locks_unsafe_for_binlog"] = 1
 default["percona"]["cluster"]["innodb_autoinc_lock_mode"]       = 2
 ```
@@ -263,6 +357,16 @@ default["percona"]["cluster"]["innodb_autoinc_lock_mode"]       = 2
 ```ruby
 default["percona"]["plugins_version"] = "1.1.3"
 default["percona"]["plugins_packages"] = %w[percona-nagios-plugins percona-zabbix-templates percona-cacti-templates]
+```
+
+### Package_repo.rb
+
+```ruby
+default["percona"]["yum"]["description"] = "Percona Packages"
+default["percona"]["yum"]["baseurl"]     = "http://repo.percona.com/centos/#{pversion}/os/#{arch}/"
+default["percona"]["yum"]["gpgkey"]      = "http://www.percona.com/downloads/RPM-GPG-KEY-percona"
+default["percona"]["yum"]["gpgcheck"]    = true
+default["percona"]["yum"]["sslverify"]   = true
 ```
 
 ## Explicit my.cnf templating
@@ -363,6 +467,7 @@ Many thanks go to the following [contributors](https://github.com/phlipper/chef-
     * add the `monitoring` recipe
 * **[@jesseadams](https://github.com/jesseadams)**
     * fixes for custom datadir setting use case
+    * add more Percona XtraDB cluster options
 * **[@see0](https://github.com/see0)**
     * fix incorrect root password reference
 * **[@baldur](https://github.com/baldur)**
@@ -380,6 +485,7 @@ Many thanks go to the following [contributors](https://github.com/phlipper/chef-
     * add default utf8 character set option
     * cleanup replication support
     * remove dependency on opscode/mysql cookbook
+    * fix permissions for configuration files
 * **[@alexzorin](https://github.com/alexzorin)**
     * add support for `skip-name-resolve` option
 * **[@jyotty](https://github.com/jyotty)**
@@ -420,6 +526,19 @@ Many thanks go to the following [contributors](https://github.com/phlipper/chef-
     * re-add cluster support
 * **[@mancdaz](https://github.com/mancdaz)**
     * install monitoring plugins from package instead of tarball
+* **[@iancoffey](https://github.com/iancoffey)**
+    * set debian-sys-maint password after grant
+    * add attribute `skip_configure`
+* **[@notnmeyer](https://github.com/notnmeyer)**
+    * fix `access_grants` guards for `cluster` and `backup` recipes
+* **[@odacrem](https://github.com/odacrem)**
+    * use correct replication username in `replication.sql`
+* **[@g3kk0](https://github.com/g3kk0)**
+    * fix missing mysql log directory
+    * add attribute `wait_timeout`
+    * data-drive percona yum repository
+    * add support for `jemalloc`
+    * fix idempotency with chef-solo and `skip_password` attribute
 
 
 ## License

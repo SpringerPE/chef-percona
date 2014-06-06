@@ -29,6 +29,9 @@ socket = <%= node["percona"]["server"]["socket"] %>
 socket           = <%= node["percona"]["server"]["socket"] %>
 nice             = <%= node["percona"]["server"]["nice"] %>
 open-files-limit = <%= node["percona"]["server"]["open_files_limit"] %>
+<% if node["percona"]["server"]["jemalloc"] %>
+malloc-lib       = <%= node["percona"]["server"]["jemalloc_lib"] %>
+<% end %>
 
 [mysqld]
 #
@@ -56,6 +59,7 @@ skip-external-locking
 
 net_read_timeout = <%= node["percona"]["server"]["net_read_timeout"] %>
 connect_timeout  = <%= node["percona"]["server"]["connect_timeout"] %>
+wait_timeout     = <%= node["percona"]["server"]["wait_timeout"] %>
 
 #
 # For compatibility to other Debian packages that still use
